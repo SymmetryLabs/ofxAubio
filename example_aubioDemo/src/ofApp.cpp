@@ -1,8 +1,75 @@
+//Adapted by Amanda Lind Fall 2016
 #include "ofApp.h"
 #include "ofEventUtils.h"
+#include "asio.hpp" //For socket integration
+#include "json.hpp" //For json socket integration
+#include <string.h>
+#include "oscpkt.hh"
 
-//--------------------------------------------------------------
+
+//---------------------Global Var: JSON------------------------------------
+
+using json = nlohmann::json;
+json aubio_output_json;
+
+//---------------------Global Var: ASIO------------------------------------
+
+std::string s;
+using asio::ip::udp;
+asio::io_service io_service;
+#define PORT "1330"
+
+//---------------------Global Var: OSC-------------------------------------
+
+using namespace oscpkt;
+PacketWriter pkt;
+Message msg;
+const void * message;
+int size;
+
+//---------------------UDP Classes-----------------------------------------
+
+class UDPClient
+{
+public:
+    UDPClient(
+              asio::io_service& io_service,
+              const std::string& host,
+              const std::string& port
+              ) : io_service_(io_service), socket_(io_service, udp::endpoint(udp::v4(), 0)) {
+        udp::resolver resolver(io_service_);
+        udp::resolver::query query(udp::v4(), host, port);
+        udp::resolver::iterator iter = resolver.resolve(query);
+        endpoint_ = *iter;
+    }
+    
+    ~UDPClient()
+    {
+        socket_.close();
+    }
+    
+    void send(const std::string& msg) {
+        socket_.send_to(asio::buffer(msg, msg.size()), endpoint_);
+    }
+    
+    void send_osc(const void *msg, int size) {
+        socket_.send_to(asio::buffer(msg, size), endpoint_);
+    }
+    
+private:
+    asio::io_service& io_service_;
+    udp::socket socket_;
+    udp::endpoint endpoint_;
+};
+
+
+UDPClient client(io_service, "localhost", PORT);
+
+
+//---------------------OF/AUBIO Classes-----------------------------------------
 void ofApp::setup(){
+  
+    
     // set the size of the window
     ofSetWindowShape(750, 250);
 
@@ -57,6 +124,7 @@ void ofApp::setup(){
     for (int i = 0; i < 40; i++) {
         bandPlot.addVertex( 50 + i * 650 / 40., 240 - 100 * bands.energies[i]);
     }
+    
 }
 
 void ofApp::exit(){
@@ -85,6 +153,9 @@ void ofApp::update(){
 
 //--------------------------------------------------------------
 void ofApp::draw(){
+
+
+    
     // update beat info
     if (gotBeat) {
         ofSetColor(ofColor::green);
@@ -100,13 +171,41 @@ void ofApp::draw(){
     }
     onsetNovelty = onset.novelty;
     onsetThresholdedNovelty = onset.thresholdedNovelty;
+    std::cout<<"Onset Threshold Novelty:"<<onsetThresholdedNovelty<<endl ;
 
     // update pitch info
     pitchConfidence = pitch.pitchConfidence;
     if (pitch.latestPitch) midiPitch = pitch.latestPitch;
-    bpm = beat.bpm;
+    std::cout<<"Pitch:"<<midiPitch<<endl ;
 
+    // update BPM
+    bpm = beat.bpm;
+    std::cout<<"BPM:"<<bpm<<endl ;
+
+    // Make JSON Object
+    aubio_output_json["onsetThresholdedNovelty"] = onset.thresholdedNovelty;
+    aubio_output_json["midiPitch"] = pitch.latestPitch;
+    aubio_output_json["bpm"] = beat.bpm;
+    std::string s = aubio_output_json.dump();
+    //client.send("Test");      //This is a string
+    //client.send(s);           //This is JSON
+    
+    // Make OSC Object
+    pkt.startBundle();
+    pkt.addMessage(msg.init("/aubio/onset").pushFloat(onset.thresholdedNovelty));
+    pkt.addMessage(msg.init("/aubio/midiPitch").pushFloat(pitch.latestPitch));
+    pkt.addMessage(msg.init("/aubio/bpm").pushFloat(beat.bpm));
+    pkt.endBundle();
+    if (pkt.isOk()) {
+        message=pkt.packetData();
+        size= pkt.packetSize();
+        client.send_osc(message, size);
+    }
+    msg.clear();
+    pkt.Reset();
+    
     // draw
+    
     pitchGui.draw();
     beatGui.draw();
     onsetGui.draw();
@@ -177,3 +276,6 @@ void ofApp::beatEvent(float & time) {
     //ofLog() << "got beat at " << time << " s";
     gotBeat = true;
 }
+
+
+

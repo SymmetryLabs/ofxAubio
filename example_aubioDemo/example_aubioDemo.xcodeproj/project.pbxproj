@@ -433,7 +433,6 @@
 					/usr/local/Cellar/nlohmann_json/2.0.6/include,
 					../../../libs/boost/include,
 					../../../../../oscpack_1_1_0,
-					../../../addons/ofxAubio/example_aubioDemo/ofxOsc/libs/oscpack/src,
 					../../../addons/OSCPKT/oscpkt,
 				);
 				ICON = "$(ICON_NAME_DEBUG)";
@@ -475,7 +474,6 @@
 					/usr/local/Cellar/nlohmann_json/2.0.6/include,
 					../../../libs/boost/include,
 					../../../../../oscpack_1_1_0,
-					../../../addons/ofxAubio/example_aubioDemo/ofxOsc/libs/oscpack/src,
 					../../../addons/OSCPKT/oscpkt,
 				);
 				ICON = "$(ICON_NAME_RELEASE)";
